@@ -1,11 +1,110 @@
 const express=require('express');
+var session = require('express-session')
 const app=express();
 const fs=require("fs");
+
+// express-session module to handle the login session and cookies
+app.use(session({
+    secret: 'DontKnow',
+    resave: false,
+    saveUninitialized: true,
+}))
+
 app.use(express.json());  // middleware to fetch method
+
+app.use(express.urlencoded({extended:true})); // middleware for parsing the usernanme and password from the form
+
+// app.use(express.static('public'));
+
+
+// Signup page 
+app.get("/signup",(req,res)=>{
+    res.sendFile(__dirname+"/public/signup.html");
+})
+
+// Signup form post method handling
+
+let existingData = [];
+
+try {
+  const data = fs.readFileSync("credentials.json", "utf8");
+  existingData = JSON.parse(data);
+} 
+catch (err) {
+
+}
+
+app.post("/signup",(req,res)=>{
+    const{name,email,password} = req.body;
+
+
+    const cred = {username:name,
+    email:email,
+    password:password}
+
+    existingData.push(cred);
+  
+    fs.writeFile("credentials.json", JSON.stringify(existingData), (err) => {
+      if (err) throw err;
+      console.log("User Registered Successfully");
+    });
+    res.redirect("/login");
+});
+// Signup form post method handling over 
+
+
+//Login page  
+app.get("/login",(req,res)=>{
+    res.sendFile(__dirname+"/public/login.html");
+});
+
+
+// To handle the post method of the login form
+app.post("/login", (req, res) => {
+    const username = req.body.uname;
+    const password = req.body.pass;
+  
+    try {
+      const data = fs.readFileSync("credentials.json", "utf8");
+      const userData = JSON.parse(data);
+  
+      // Find the user with the given username
+      const user = userData.find((user) => user.username === username);
+  
+      if (user && user.password === password) {
+        req.session.isLoggedIn = true;
+        req.session.username= username;
+        res.redirect("/");
+      } else {
+        res.send("Invalid credentials. Please try again.");
+      }
+    } catch (err) {
+      res.status(500).send("Server error");
+    }
+  });
+  
+
+
+// Home page 
 app.get("/",(req,res)=>{
+
+    if(!req.session.isLoggedIn){
+        res.redirect("/login");
+        return;
+    }
     res.sendFile(__dirname+"/public/index.html");
 });
+
+
+
+// Todo post method to handle the fetch from todoscript.js for saving todo in database
 app.post("/todo",(req,res)=>{
+    
+    if(!req.session.isLoggedIn){
+    res.redirect("/login");
+    return;
+    }
+
     saveAllTodos(req.body,(err)=>{
         if(err){
             res.status(500).send("error");
@@ -16,7 +115,7 @@ app.post("/todo",(req,res)=>{
 });
 
 
-
+// To handle the fetch of the delete button 
 app.post("/delTodo",(req,res)=>{
     const idselected = req.body.id;
     
@@ -43,7 +142,7 @@ app.post("/delTodo",(req,res)=>{
 });
 
 
-
+// To handle the fetch of the edit button
 app.post("/editTodo",(req,res)=>{
 
     readAllTodos((err,todo)=>{
@@ -72,8 +171,14 @@ app.post("/editTodo",(req,res)=>{
     }); 
 })
 
-
+// To show the todos in UI
 app.get("/todo-data",(req,res)=>{
+
+    if(!req.session.isLoggedIn){
+        res.redirect("/login");
+        return;
+    }
+
     readAllTodos((err,data)=>{
         if(err){
             res.status(500).send("error");
@@ -84,12 +189,30 @@ app.get("/todo-data",(req,res)=>{
 });
 
 app.get("/about",(req,res)=>{
+
+    if(!req.session.isLoggedIn){
+        res.redirect("/login");
+        return;
+    }
+
     res.sendFile(__dirname+"/public/about.html");
 });
 app.get("/contact",(req,res)=>{
+
+    if(!req.session.isLoggedIn){
+        res.redirect("/login");
+        return;
+    }
+
     res.sendFile(__dirname+"/public/contact.html");
 });
 app.get("/todo",(req,res)=>{
+
+    if(!req.session.isLoggedIn){
+        res.redirect("/login");
+        return;
+    }
+
     res.sendFile(__dirname+"/public/todo.html");
 });
 
@@ -102,6 +225,8 @@ app.get("/scripts/todoscript.js",(req,res)=>{
 app.listen(8080,()=>{
     console.log("The app is running at port http://localhost:8080");
 });
+
+
 
 function readAllTodos(callbacks){
     fs.readFile("./db.json","utf-8",(err,data)=>{
@@ -122,6 +247,8 @@ function readAllTodos(callbacks){
         }
     });
 }
+
+
 function saveAllTodos(todo,callbacks){
     readAllTodos((err,data)=>{
         if(err){
