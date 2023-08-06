@@ -1,0 +1,54 @@
+    <style>
+        header {
+            background: linear-gradient(135deg, #333, #666);
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+        }
+    
+        header p {
+            background: linear-gradient(135deg, #333, #666);
+            color: #fff;
+            float:right;
+            position:fixed;
+        }
+    
+        nav {
+            background: linear-gradient(135deg, #555, #888);
+            padding: 10px;
+            text-align: center;
+        }
+    
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        
+        nav a:hover {
+            color: #ccc;
+        }
+
+        #logoutButton {
+            background: linear-gradient(135deg, #555, #888);
+            color: white;
+            border-color: #fff;
+            position: absolute;
+            margin-left:35%;
+        }
+    </style>  
+    
+    
+    <header>
+        <p><b>Welcome <%= username %></b></p>
+        <h1>TODO APP</h1>
+    </header>
+
+
+    <nav>
+        <a href="/">Home</a>
+        <a href="/todo">Todo</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+        <a href="/logout"id="logoutButton">Logout</a>
+    </nav>
