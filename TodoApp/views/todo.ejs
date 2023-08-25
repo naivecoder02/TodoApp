@@ -56,14 +56,16 @@
   <%- include("components/header",{username:username}) %>
   <main>
     <div class="todo-container">
-      <input type="text" id="newTodoInput" class="todo-input" placeholder="Add a new todo..."/>
-      <select id ="prioritySelector" class="priority">
+      <form id="todoForm"  method = "post"  action="/addTodata" enctype="multipart/form-data">
+        <input type="text" id="newTodoInput" class="todo-input" placeholder="Add a new todo..." name="todoText" />
+        <input type="file" id="todoimg" name="todoimg">
+        <select id ="prioritySelector" class="priority"  name="priority"> 
         <option value="high">High</option>
         <option value="medium">Medium</option>
         <option value="low">Low</option>
-      </select>
-      <button id='btnId' class="add-btn">Add</i></button>
-
+        </select>
+        <button id='btnId' class="add-btn">Add</i></button>
+      </form>
       <div id="todos">
         
         <!-- Todo items will appear here -->
