@@ -1,7 +1,28 @@
 const express=require('express');
 var session = require('express-session')
-const app=express();
 const fs=require("fs");
+
+// middle ware for handling the multimedia files such as photos and videos 
+const multer = require('multer');
+
+const multerStorage = multer.diskStorage({
+    destination:(req,file,callback)=>{
+        callback(null,__dirname+'/uploads');
+    },
+    filename:( req, file, callback )=>{
+        callback( null, file.originalname );
+    },
+});
+
+
+
+const upload = multer({storage: multerStorage});
+
+
+const app=express();
+
+app.set("view engine","ejs");
+
 
 // express-session module to handle the login session and cookies
 app.use(session({
@@ -10,16 +31,67 @@ app.use(session({
     saveUninitialized: true,
 }))
 
+app.use( function(req,res, next ) {
+    console.log(req.url, req.method );
+    next()
+})
+
 app.use(express.json());  // middleware to fetch method
 
 app.use(express.urlencoded({extended:true})); // middleware for parsing the usernanme and password from the form
 
-// app.use(express.static('public'));
+app.use(upload.single('todoimg'));
+
+// To get the profile pic of the particular user form the uploads folder at runtime 
+app.use(express.static('uploads'));
+
+
+// To handle the todo form
+
+
+
+app.post("/addTodata", (req, res) => {
+    const todoText = req.body.todoText;
+    const priority = req.body.priority;
+    const filename = req.file.originalname;
+
+    var a = filename;
+    console.log(a);
+
+    // Check if the required fields are provided
+    if (!todoText || !priority || !filename) {
+        res.render('todo', { username: req.session.username, error: 'Enter valid todo and image' });
+        return;
+    }
+
+    // Create a todo object
+    const id = Math.floor(Math.random() * 10000000000000001);
+
+
+    const todo = {
+        id,
+        todoText,
+        priority,
+        filename,
+        saved: 'no'
+    };
+
+    // Save the todo using your saveAllTodos function or similar logic
+    saveAllTodos(todo, (err) => {
+        if (err) {
+            throw err;
+        }
+    });
+
+    res.redirect('/todo');
+});
+
+
 
 
 // Signup page 
 app.get("/signup",(req,res)=>{
-    res.sendFile(__dirname+"/public/signup.html");
+    res.render("signup");
 })
 
 // Signup form post method handling
@@ -37,10 +109,10 @@ catch (err) {
 app.post("/signup",(req,res)=>{
     const{name,email,password} = req.body;
 
-
     const cred = {username:name,
     email:email,
-    password:password}
+    password:password,
+   } 
 
     existingData.push(cred);
   
@@ -55,7 +127,7 @@ app.post("/signup",(req,res)=>{
 
 //Login page  
 app.get("/login",(req,res)=>{
-    res.sendFile(__dirname+"/public/login.html");
+    res.render("login",{error:null});
 });
 
 
@@ -63,20 +135,21 @@ app.get("/login",(req,res)=>{
 app.post("/login", (req, res) => {
     const username = req.body.uname;
     const password = req.body.pass;
-  
     try {
       const data = fs.readFileSync("credentials.json", "utf8");
       const userData = JSON.parse(data);
-  
+
+
+
       // Find the user with the given username
       const user = userData.find((user) => user.username === username);
-  
+
       if (user && user.password === password) {
         req.session.isLoggedIn = true;
         req.session.username= username;
         res.redirect("/");
       } else {
-        res.send("Invalid credentials. Please try again.");
+        res.render("login",{error:"Invalid username or password"});
       }
     } catch (err) {
       res.status(500).send("Server error");
@@ -92,10 +165,8 @@ app.get("/",(req,res)=>{
         res.redirect("/login");
         return;
     }
-    res.sendFile(__dirname+"/public/index.html");
+    res.render("index",{username:req.session.username});
 });
-
-
 
 // Todo post method to handle the fetch from todoscript.js for saving todo in database
 app.post("/todo",(req,res)=>{
@@ -169,7 +240,7 @@ app.post("/editTodo",(req,res)=>{
             res.status(200).json({update:'success'})
         });
     }); 
-})
+});
 
 // To show the todos in UI
 app.get("/todo-data",(req,res)=>{
@@ -188,6 +259,8 @@ app.get("/todo-data",(req,res)=>{
     });
 });
 
+
+
 app.get("/about",(req,res)=>{
 
     if(!req.session.isLoggedIn){
@@ -195,8 +268,12 @@ app.get("/about",(req,res)=>{
         return;
     }
 
-    res.sendFile(__dirname+"/public/about.html");
+    res.render("about",{username:req.session.username});
 });
+
+
+
+
 app.get("/contact",(req,res)=>{
 
     if(!req.session.isLoggedIn){
@@ -204,8 +281,11 @@ app.get("/contact",(req,res)=>{
         return;
     }
 
-    res.sendFile(__dirname+"/public/contact.html");
+    res.render("contact",{username:req.session.username});
 });
+
+
+
 app.get("/todo",(req,res)=>{
 
     if(!req.session.isLoggedIn){
@@ -213,8 +293,23 @@ app.get("/todo",(req,res)=>{
         return;
     }
 
-    res.sendFile(__dirname+"/public/todo.html");
+    res.render("todo",{username:req.session.username});
 });
+
+// To handle the logout button 
+app.get("/logout", (req, res) => {
+    // Destroy the session to logout the user
+    req.session.destroy((err) => {
+        if (err) {
+            res.status(500).send("Server error");
+            return;
+        }
+        // Redirect the user to the login page after logout
+        res.redirect("/login");
+    });
+});
+
+
 
 app.get("/scripts/todoscript.js",(req,res)=>{
     res.sendFile(__dirname+"/scripts/todoscript.js");
