@@ -1,6 +1,12 @@
 const express=require('express');
 var session = require('express-session')
-const fs=require("fs");
+const fs = require("fs");
+
+const db = require("./models/db");
+
+const usermodel = require("./models/users");
+
+const todomodel = require("./models/todo");
 
 // middle ware for handling the multimedia files such as photos and videos 
 const multer = require('multer');
@@ -33,7 +39,7 @@ app.use(session({
 
 app.use( function(req,res, next ) {
     console.log(req.url, req.method );
-    next()
+    next();
 })
 
 app.use(express.json());  // middleware to fetch method
@@ -55,8 +61,8 @@ app.post("/addTodata", (req, res) => {
     const priority = req.body.priority;
     const filename = req.file.originalname;
 
-    var a = filename;
-    console.log(a);
+    // var a = filename;
+    // console.log(a);
 
     // Check if the required fields are provided
     if (!todoText || !priority || !filename) {
@@ -76,14 +82,14 @@ app.post("/addTodata", (req, res) => {
         saved: 'no'
     };
 
-    // Save the todo using your saveAllTodos function or similar logic
-    saveAllTodos(todo, (err) => {
-        if (err) {
-            throw err;
-        }
+    todomodel.create(todo).then(()=>{
+        res.redirect('/todo');
+    })
+    .catch((err)=>{
+        res.render("todo",{error:err});
     });
 
-    res.redirect('/todo');
+    
 });
 
 
@@ -96,15 +102,15 @@ app.get("/signup",(req,res)=>{
 
 // Signup form post method handling
 
-let existingData = [];
+// let existingData = [];
 
-try {
-  const data = fs.readFileSync("credentials.json", "utf8");
-  existingData = JSON.parse(data);
-} 
-catch (err) {
+// try {
+//   const data = fs.readFileSync("credentials.json", "utf8");
+//   existingData = JSON.parse(data);
+// } 
+// catch (err) {
 
-}
+// }
 
 app.post("/signup",(req,res)=>{
     const{name,email,password} = req.body;
@@ -114,13 +120,21 @@ app.post("/signup",(req,res)=>{
     password:password,
    } 
 
-    existingData.push(cred);
-  
-    fs.writeFile("credentials.json", JSON.stringify(existingData), (err) => {
-      if (err) throw err;
-      console.log("User Registered Successfully");
-    });
+   usermodel.create(cred).then(()=>{
+    console.log("User Registered Successfully");
     res.redirect("/login");
+   })
+   .catch((err)=>{
+    res.render("signup",{error :err});
+   }); 
+
+//     existingData.push(cred);
+  
+//     fs.writeFile("credentials.json", JSON.stringify(existingData), (err) => {
+//       if (err) throw err;
+//       console.log("User Registered Successfully");
+//     });
+//     res.redirect("/login");
 });
 // Signup form post method handling over 
 
@@ -135,25 +149,39 @@ app.get("/login",(req,res)=>{
 app.post("/login", (req, res) => {
     const username = req.body.uname;
     const password = req.body.pass;
-    try {
-      const data = fs.readFileSync("credentials.json", "utf8");
-      const userData = JSON.parse(data);
+
+    usermodel.findOne({username:username,password:password})
+    .then((user)=>{
+        if(user){
+            req.session.isLoggedIn = true;
+            req.session.username= username;
+            res.redirect("/");  
+            return;
+        }
+        res.render("login",{error:"Invalid credentials"});
+    }).catch((err)=>{
+         res.render("login",{error:"Something went wrong"});
+    });
+
+    // try {
+    //   const data = fs.readFileSync("credentials.json", "utf8");
+    //   const userData = JSON.parse(data);
 
 
 
-      // Find the user with the given username
-      const user = userData.find((user) => user.username === username);
+    //   // Find the user with the given username
+    //   const user = userData.find((user) => user.username === username);
 
-      if (user && user.password === password) {
-        req.session.isLoggedIn = true;
-        req.session.username= username;
-        res.redirect("/");
-      } else {
-        res.render("login",{error:"Invalid username or password"});
-      }
-    } catch (err) {
-      res.status(500).send("Server error");
-    }
+    //   if (user && user.password === password) {
+    //     req.session.isLoggedIn = true;
+    //     req.session.username= username;
+    //     res.redirect("/");
+    //   } else {
+    //     res.render("login",{error:"Invalid username or password"});
+    //   }
+    // } catch (err) {
+    //   res.status(500).send("Server error");
+    // }
   });
   
 
@@ -187,76 +215,42 @@ app.post("/todo",(req,res)=>{
 
 
 // To handle the fetch of the delete button 
-app.post("/delTodo",(req,res)=>{
+app.post("/delTodo",async(req,res)=>{
     const idselected = req.body.id;
     
-    readAllTodos((err,todo)=>{
-        if(err){
-            res.status(500).json({result:"failure"})
-            return;
-        }
-        else{
-            todo.forEach((data,idx) => {
-                if(data.id=== idselected){
-                    todo.splice(idx,1);
-                }
-            });
-        }
-        fs.writeFile("./db.json",JSON.stringify(todo),(err)=>{
-            if( err ){
-                res.status(500).json({result:'failure W'});
-            }
+    const result =  await todomodel.findByIdAndDelete(idselected);
             
-            res.status(200).json({result:'success'})
-        });
-    }); 
+    res.status(200).json({result:'success'})
 });
 
 
 // To handle the fetch of the edit button
-app.post("/editTodo",(req,res)=>{
+app.post("/editTodo",async(req,res)=>{
 
-    readAllTodos((err,todo)=>{
-        if(err){
-            res.status(500).json({update:'failed'});
-            return;
-        }
+    const edited = req.body;
+    const todoText = await todomodel.findById(edited.id);
 
-        const edited = req.body;
-        console.log(edited.id);
+    const todo ={
+        todoText:edited.data,
+        priority:todoText.priority,
+        filename:todoText.filename
+    }
 
-        todo.forEach((data,idx)=>{
-            console.log(data.id);
-            if(data.id === edited.id){
-                todo[idx].todoText = edited.data;
-            }
-        });
-
-        fs.writeFile("./db.json",JSON.stringify(todo),(err)=>{
-            if( err ){
-                res.status(500).json({ update :'failed'});
-            }
+    const update= await todomodel.findByIdAndUpdate(edited.id,todo);
+    console.log(update);
             
-            res.status(200).json({update:'success'})
-        });
-    }); 
+    res.status(200).json({update:'success'}) 
 });
 
 // To show the todos in UI
-app.get("/todo-data",(req,res)=>{
+app.get("/todo-data",async(req,res)=>{
 
     if(!req.session.isLoggedIn){
         res.redirect("/login");
         return;
     }
-
-    readAllTodos((err,data)=>{
-        if(err){
-            res.status(500).send("error");
-            return;
-        }
+        const data = await todomodel.find();
         res.status(200).json(data);
-    });
 });
 
 
@@ -315,10 +309,16 @@ app.get("/scripts/todoscript.js",(req,res)=>{
     res.sendFile(__dirname+"/scripts/todoscript.js");
 });
 
-
+//  To connect the db first then start the server
+db.init().then(()=>{
+    console.log("db connected");
 
 app.listen(8080,()=>{
     console.log("The app is running at port http://localhost:8080");
+});
+})
+.catch((err)=>{
+    console.log(err);
 });
 
 
@@ -344,19 +344,19 @@ function readAllTodos(callbacks){
 }
 
 
-function saveAllTodos(todo,callbacks){
-    readAllTodos((err,data)=>{
-        if(err){
-            callbacks(err);
-             return;
-         }
-         data.push(todo); 
-         fs.writeFile("./db.json",JSON.stringify(data),(err)=>{
-            if(err){
-                callbacks(err);
-                return;
-            }
-            callbacks(null);
-        }); 
-    });
-}
+// function saveAllTodos(todo,callbacks){
+//     readAllTodos((err,data)=>{
+//         if(err){
+//             callbacks(err);
+//              return;
+//          }
+//          data.push(todo); 
+//          fs.writeFile("./db.json",JSON.stringify(data),(err)=>{
+//             if(err){
+//                 callbacks(err);
+//                 return;
+//             }
+//             callbacks(null);
+//         }); 
+//     });
+// }
